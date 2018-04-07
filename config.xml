@@ -5,10 +5,16 @@
        <pair1_mac1>mac1</pair1_mac1>
 	   <pair1_mac2>mac2</pair1_mac2>
   </repeater_pair>
-  
   <repeater_pair>
        <pair1_mac1>mac4</pair1_mac1>
 	   <pair1_mac2>mac3</pair1_mac2>
   </repeater_pair>
-
+    <repeater_pair>
+        <pair1_mac1>mac1</pair1_mac1>
+        <pair1_mac2>mac3</pair1_mac2>
+    </repeater_pair>
+    <repeater_pair>
+        <pair1_mac1>mac1</pair1_mac1>
+        <pair1_mac2>mac4</pair1_mac2>
+    </repeater_pair>
 </message_repeater>
