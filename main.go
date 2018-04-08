@@ -8,11 +8,6 @@ import (
 	"net"
 	"fmt"
 	"log"
-	"encoding/xml"
-	"io/ioutil"
-	"strings"
-	"strconv"
-	"encoding/json"
 )
 
 
@@ -46,132 +41,10 @@ func RepeaterServer() {
 			log.Println(err.Error())
 		}
 		//开一个goroutines处理客户端消息，这是golang的特色，实现并发就只go一下就好
-		go doServerHandle(conn)
+		go DoServerHandle(conn)
 	}
 }
 
-
-//处理客户端消息
-func doServerHandle(conn net.Conn) {
-	log.Println("有客户端连接")
-	mac := ""
-	defer fmt.Println("一个连接退出")
-	defer conn.Close();
-	defer RemoveMacConn(&mac)
-	defer log.Println(conn_map)
-	//预先接收 mac 地址
-	//装载 mac和conn 到map
-
-	for {
-		//获取报文体的长度
-		first := make([]byte, tcplen)
-		l, err := conn.Read(first) //读取客户机发的消息
-		log.Println(l)
-		log.Println(first)
-		if err != nil {
-			log.Println(err)
-			return
-		}
-		err,tl := GetMessageLen(first)
-		if err != nil {
-			log.Println(err)
-			return
-		}
-		//解析报文头
-		second := make([]byte, tl.Secondlen)
-		_, err = conn.Read(second)
-		err,tcpHead,pair := MsgToTcpHead(second)
-		if err != nil {
-			return
-		}
-		log.Println(tcpHead)
-		log.Println(pair)
-
-		//查找匹配mac地址
-		b := IsMacRegister(&pair.Pair_mac1)
-		if !b{
-			log.Println("该mac未注册")
-			return
-		}
-
-		//第三部分报文体
-		third := make([]byte, tl.Thirdlen)
-		_, err = conn.Read(third)
-		if err != nil {
-			log.Println(err)
-			return
-		}
-		log.Println(third)
-
-
-		SaveMacConn(conn, &pair.Pair_mac1)
-		mac = pair.Pair_mac1
-		break;
-	}
-
-
-
-	//消息处理循环
-	for {
-
-		//获取报文体的长度
-		first := make([]byte, tcplen)
-		l, err := conn.Read(first) //读取客户机发的消息
-		log.Println(l)
-		log.Println(first)
-		if err != nil {
-			log.Println(err)
-			break;
-		}
-		err,tl := GetMessageLen(first)
-		if err != nil {
-			log.Println(err)
-			break;
-		}
-        //解析报文头
-		second := make([]byte, tl.Secondlen)
-		_, err = conn.Read(second)
-        err,tcpHead,pair := MsgToTcpHead(second)
-		if err != nil {
-			break;
-		}
-		log.Println(tcpHead)
-		log.Println(pair)
-
-		//查找匹配mac地址
-		b := FindPair(pair)
-        if !b{
-			log.Println("该链接未注册")
-			break;
-		}
-
-		//第三部分报文体
-		third := make([]byte, tl.Thirdlen)
-		_, err = conn.Read(third)
-		if err != nil {
-			break;
-		}
-		log.Println(third)
-
-		// 转发消息到对应的客户端
-		conn_des  := FindConn(&pair.Pair_mac2)
-		if conn_des == nil{
-           log.Println("对方不在线")
-           break;
-		}
-
-		var desmsg []byte
-		desmsg = append(desmsg,first...)
-		desmsg = append(desmsg,second...)
-		desmsg = append(desmsg,third...)
-		_, err = conn_des.Write(desmsg)
-		if err != nil {
-			log.Println(err)
-			break;
-		}
-		//转发结束
-	}
-}
 
 
 func init() {
@@ -182,180 +55,14 @@ func init() {
 	ConfigToMap()
 }
 
-func ConfigReload(){
 
 
 
 
-}
-
-type ConfigResult struct {
-	XMLName xml.Name `xml:"message_repeater"`
-	Repeater_max_number int `xml:"repeater_max_number"`
-	Mrs []Repeater_pair `xml:"repeater_pair"`
-}
-
-type Repeater_pair struct {
-	Pair_mac1 string `xml:"pair1_mac1"` // 解析的时候默认 SrcMac 是Pair_mac1
-	Pair_mac2 string `xml:"pair1_mac2"` // 解析的时候默认 DesMac 是Pair_mac2
-}
 
 
-func ConfigLoad() {
-	content, err := ioutil.ReadFile("E:\\go\\message_repeater\\config.xml")
-	if err != nil {
-		log.Fatal(err)
-	}
-	err = xml.Unmarshal(content, &CR)
-	if err != nil {
-		log.Fatal(err)
-	}
-}
-
-func ConfigToMap(){
-	repeater_map_lock.Lock()
-	defer repeater_map_lock.Unlock()
-	repeater_register_map_lock.Lock()
-	defer repeater_register_map_lock.Unlock()
-
-	for _,v := range CR.Mrs{
-		repeater_register_map[v.Pair_mac1] = ""
-		repeater_register_map[v.Pair_mac2] = ""
-		r := strings.Compare(v.Pair_mac1,v.Pair_mac2)
-		if  r < 0{
-		   repeater_map[v.Pair_mac1+v.Pair_mac2] = ""
-		}else {
-			repeater_map[v.Pair_mac2+v.Pair_mac1] = ""
-		}
-	}
-}
-
-func IsMacRegister(mac *string)(bool){
-	repeater_register_map_lock.Lock()
-	defer repeater_register_map_lock.Unlock()
-	_,exist := repeater_register_map[*mac]
-	if exist{
-		return true
-	}else{
-		return false
-	}
-}
-
-func FindPair(p *Repeater_pair)(b bool){
-	repeater_map_lock.Lock()
-	defer repeater_map_lock.Unlock()
-	r := strings.Compare(p.Pair_mac1,p.Pair_mac2)
-	var s string
-	if  r < 0{
-		s = p.Pair_mac1+p.Pair_mac2
-	}else {
-		s = p.Pair_mac2+p.Pair_mac1
-	}
-	_, exist := repeater_map[s]
-    if exist{
-    	return true
-	}
-	return false;
-}
-
-type TcpFirst struct{
-    Secondlen int
-    Thirdlen int
-}
-type TcpSecond struct{
-	SrcMac string `json:"src_mac"`
-	DesMac string `json:"des_mac"`
-}
-type TcpThird struct{
-	body []byte
-}
 
 
-func GetMessageLen(tl []byte)(error,TcpFirst){
-	t := string(0)
-	ls := string(tl)
-
-	hls := ls[:4]
-	bls := ls[4:]
-	var tf TcpFirst
-
-	pos := strings.IndexAny(hls,t)
-	var l int
-	var err error
-	if pos == -1{
-		l ,err = strconv.Atoi(string(hls))
-	}else {
-		l ,err =strconv.Atoi(string(hls[:pos]))
-	}
-	if err!= nil{
-		return err,tf
-	}
-	tf.Secondlen = l
-
-
-	pos = strings.IndexAny(bls,t)
-	if pos == -1{
-		l ,err = strconv.Atoi(string(bls))
-	}else {
-		l ,err =strconv.Atoi(string(bls[:pos]))
-	}
-	if err!= nil{
-		return err,tf
-	}
-	tf.Thirdlen = l
-
-	return nil,tf
-}
-
-func MsgToTcpHead(s []byte)(error,*TcpSecond,*Repeater_pair){
-	var datap Repeater_pair
-	var data TcpSecond
-
-	if err := json.Unmarshal(s,&data); err != nil {
-		log.Println("Repeater_pair 解析错误"+err.Error())
-		return err,nil,nil
-	}
-	datap.Pair_mac1 = data.SrcMac
-	datap.Pair_mac2 = data.DesMac
-
-	return nil,&data,&datap
-}
-
-func TcpBodyToMsg(tb*TcpSecond)(error,[]byte){
-	if bt,err := json.Marshal(tb); err != nil{
-		log.Println("TcpBodyToMsg 解析错误"+err.Error())
-        return err,nil
-	}else{
-		first := make([]byte,tcplen)
-		copy(first ,[]byte(strconv.Itoa(len(bt))))
-		var btr []byte
-		btr = append(btr,bt...)
-        return nil,btr
-	}
-}
-
-func FindConn(mac *string)(conn net.Conn){
-	conn_map_lock.Lock()
-	conn_map_lock.Unlock()
-	c,exist := conn_map[*mac]
-	if exist{
-		return c
-	}else{
-		return nil
-	}
-}
-
-func SaveMacConn(conn net.Conn,mac *string){
-	conn_map_lock.Lock()
-	conn_map_lock.Unlock()
-	conn_map[*mac] = conn
-}
-
-func RemoveMacConn(mac *string){
-	conn_map_lock.Lock()
-	conn_map_lock.Unlock()
-	delete(conn_map,*mac)
-}
 
 
 
@@ -369,6 +76,7 @@ func RemoveMacConn(mac *string){
 7：conn 连接有个 mac 对应的map
 6: 建立一个本地客户端
 7: 报文传输的 mac 设计 SrcMac DesMac
+8: 添加失踪保持一个连接的功能
 */
 
 
@@ -394,9 +102,9 @@ func (p *program) Stop(s service.Service) error {
 
 func service_entry() {
 	svcConfig := &service.Config{
-		Name:        "asd", //服务显示名称
-		DisplayName: "asd", //服务名称
-		Description: "asd", //服务描述
+		Name:        "a_repeater_server", //服务显示名称
+		DisplayName: "a_repeater_server", //服务名称
+		Description: "a_repeater_server", //服务描述
 	}
 
 	prg := &program{}
