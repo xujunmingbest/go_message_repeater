@@ -14,6 +14,8 @@ import (
 func DoServerHandle(conn net.Conn) {
 	log.Println("有客户端连接")
 	mac := ""
+	srcmac:=""
+	desmac:=""
 	defer fmt.Println("一个连接退出")
 	defer conn.Close();
 	defer RemoveMacConn(&mac,conn)
@@ -23,33 +25,33 @@ func DoServerHandle(conn net.Conn) {
 
 	for {
 		//获取报文体的长度
-		first := make([]byte, tcplen)
-		l, err := conn.Read(first) //读取客户机发的消息
-		log.Println(l)
-		log.Println(first)
+		err,first := GetMsg(conn,tcplen)
 		if err != nil {
 			log.Println(err)
 			return
 		}
 		err,tl := GetMessageLen(first)
 		if err != nil {
+			SendErr(6,&srcmac,&desmac,conn)
 			log.Println(err)
 			return
 		}
 		//解析报文头
-		second := make([]byte, tl.Secondlen)
-		_, err = conn.Read(second)
-		err,tcpHead,pair := MsgToTcpHead(second)
+		err,second := RecvHead(conn,tl.Secondlen)
 		if err != nil {
+			log.Println("接收报文头出错")
 			return
 		}
-		log.Println(tcpHead)
-		log.Println(pair)
+		err,_,pair := MsgToTcpHead(second)
+		if err != nil {
+			SendErr(7,&srcmac,&desmac,conn)
+			return
+		}
 
 		//查找匹配mac地址
 		b := IsMacRegister(&pair.Pair_mac1)
+
 		if !b{
-			log.Println("IsMacRegister")
 			SendErr(4,&pair.Pair_mac1,&pair.Pair_mac1,conn)
 			return
 		}
@@ -57,14 +59,11 @@ func DoServerHandle(conn net.Conn) {
 		checkLogin(&pair.Pair_mac1)
 
 		//第三部分报文体
-		third := make([]byte, tl.Thirdlen)
-		_, err = conn.Read(third)
+		err,_= GetMsg(conn,tl.Thirdlen)
 		if err != nil {
 			log.Println(err)
 			return
 		}
-		log.Println("third",string(third))
-
 
 		SaveMacConn(conn, &pair.Pair_mac1)
 		mac = pair.Pair_mac1
@@ -77,42 +76,40 @@ func DoServerHandle(conn net.Conn) {
 	for {
 
 		//获取报文体的长度
-		first := make([]byte, tcplen)
-		l, err := conn.Read(first) //读取客户机发的消息
-		log.Println(l)
-		log.Println(first)
+		err,first := GetMsg(conn,tcplen)
 		if err != nil {
 			log.Println(err)
-			break;
+			return
 		}
 		err,tl := GetMessageLen(first)
 		if err != nil {
+			SendErr(6,&srcmac,&desmac,conn)
 			log.Println(err)
-			break;
+			return
 		}
 		//解析报文头
-		second := make([]byte, tl.Secondlen)
-		_, err = conn.Read(second)
-		err,tcpHead,pair := MsgToTcpHead(second)
+		err,second := RecvHead(conn,tl.Secondlen)
 		if err != nil {
-			break;
+			log.Println("接收报文头出错")
+			return
 		}
-		log.Println(tcpHead)
-		log.Println(pair)
-
+		err,_,pair := MsgToTcpHead(second)
+		if err != nil {
+			log.Println("解析报文头出错 错误返回客户端")
+			return
+		}
 
 		//第三部分报文体
-		third := make([]byte, tl.Thirdlen)
-		_, err = conn.Read(third)
+		err,third := GetMsg(conn,tl.Thirdlen)
 		if err != nil {
-			break;
+			log.Println(err)
+			return
 		}
-		log.Println("third",string(third))
 
 		//查找匹配mac地址
 		b := FindPair(pair)
 		if !b{
-			log.Println("该链接未注册")
+			SendErr(3,&pair.Pair_mac1,&pair.Pair_mac2,conn)
 			continue
 		}
 
@@ -120,20 +117,16 @@ func DoServerHandle(conn net.Conn) {
 		// 转发消息到对应的客户端
 		conn_des  := FindConn(&pair.Pair_mac2)
 		if conn_des == nil{
-			log.Println("对方不在线")
+			SendErr(2,&pair.Pair_mac1,&pair.Pair_mac2,conn)
 			continue;
 		}
 
-		var desmsg []byte
-		desmsg = append(desmsg,first...)
-		desmsg = append(desmsg,second...)
-		desmsg = append(desmsg,third...)
+		desmsg := GenerateMsg(second,third)
 		_, err = conn_des.Write(desmsg)
-
-
 		if err != nil {
 			log.Println(err)
-			break;
+			SendErr(8,&pair.Pair_mac1,&pair.Pair_mac2,conn)
+			return
 		}
 		//转发结束
 	}
@@ -172,8 +165,14 @@ func FindPair(p *Repeater_pair)(b bool){
 	return false;
 }
 
+func GetMsg(conn net.Conn,len int)(error,[]byte){
+	msg := make([]byte, len)
+	_, err := conn.Read(msg) //读取客户机发的消息
+    return err,msg
+}
 
 func GetMessageLen(tl []byte)(error,TcpFirst){
+
 	t := string(0)
 	ls := string(tl)
 
@@ -211,15 +210,24 @@ func GetMessageLen(tl []byte)(error,TcpFirst){
 
 
 
+func RecvHead(conn net.Conn,len int)(error,[]byte){
+	second := make([]byte,len)
+	_, err := conn.Read(second)
+	enc := mahonia.NewDecoder("gb18030")
+	secondt := enc.ConvertString(string(second))
+	if err != nil {
+		return err,nil
+	}else{
+		return err,[]byte(secondt)
+	}
+
+}
+
 //将接收到的消息转化为 文件头
 func MsgToTcpHead(s []byte)(error,*TcpSecond,*Repeater_pair){
 	var datap Repeater_pair
 	var data TcpSecond
-
-	enc := mahonia.NewDecoder("gb18030")
-	sl:= enc.ConvertString(string(s))
-
-	if err := json.Unmarshal([]byte(sl),&data); err != nil {
+	if err := json.Unmarshal(s,&data); err != nil {
 		log.Println("Repeater_pair 解析错误"+err.Error())
 		return err,nil,nil
 	}
@@ -228,6 +236,36 @@ func MsgToTcpHead(s []byte)(error,*TcpSecond,*Repeater_pair){
 
 	return nil,&data,&datap
 }
+
+func GenerateMsg(second []byte,third  []byte)([]byte){
+	fl := make([]byte,4)
+	copy(fl ,[]byte(strconv.Itoa(len(second))))
+	fs := make([]byte,8)
+	copy(fs ,[]byte(strconv.Itoa(len(third))))
+    var finall []byte
+	finall = append(finall,fl...)
+	finall = append(finall,fs...)
+	finall = append(finall,second...)
+	finall = append(finall,third...)
+	return finall
+}
+
+
+func TcpBodyToMsg(tb*TcpSecond)(error,[]byte){
+	if bt,err := json.Marshal(tb); err != nil{
+		log.Println("TcpBodyToMsg 解析错误"+err.Error())
+		return err,nil
+	}else{
+		first := make([]byte,tcplen)
+		copy(first ,[]byte(strconv.Itoa(len(bt))))
+		var btr []byte
+		btr = append(btr,bt...)
+		return nil,btr
+	}
+}
+
+
+
 
 func FindConn(mac *string)(conn net.Conn){
 	conn_map_lock.Lock()
@@ -267,19 +305,6 @@ func checkLogin(mac *string){
 }
 
 
-func TcpBodyToMsg(tb*TcpSecond)(error,[]byte){
-	if bt,err := json.Marshal(tb); err != nil{
-		log.Println("TcpBodyToMsg 解析错误"+err.Error())
-		return err,nil
-	}else{
-		first := make([]byte,tcplen)
-		copy(first ,[]byte(strconv.Itoa(len(bt))))
-		var btr []byte
-		btr = append(btr,bt...)
-		return nil,btr
-	}
-}
-
 type TcpFirst struct{
 	Secondlen int
 	Thirdlen int
@@ -317,10 +342,8 @@ func SendErr(errorCode int,srcMac *string, desMac *string,c net.Conn)(error){
 		btr = append(btr,sls...)
 		btr = append(btr,bt...)
 
+		log.Println(string(bt))
 		_, err =c.Write([]byte(btr))
-		log.Println(string(bt))
-		log.Println(string(bt))
-		log.Println(string(bt))
 		if err != nil {
 			log.Println(err)
 			return err

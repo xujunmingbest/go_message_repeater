@@ -26,6 +26,8 @@ var (
 
 const (
 	tcplen = 12  //tcp长度位 12个字节  4字节报文头  8字节报文体
+	TcpHeadLen = 4
+	TcpBodyLen = 8
 )
 
 func RepeaterServer() {
