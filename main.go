@@ -31,7 +31,7 @@ const (
 )
 
 func RepeaterServer() {
-	listener, err := net.Listen("tcp", "localhost:10001")
+	listener, err := net.Listen("tcp", ":10001")
 	if err!= nil{
 		log.Fatal(err)
 	}
@@ -124,12 +124,13 @@ func service_entry() {
 			s.Install()
 			logger.Println("服务安装成功")
 			return
-		}
-
-		if os.Args[1] == "remove" {
+		}else if os.Args[1] == "remove" {
 			s.Uninstall()
 			logger.Println("服务卸载成功")
 			return
+		} else{
+
+
 		}
 	}
 

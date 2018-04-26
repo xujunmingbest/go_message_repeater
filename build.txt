@@ -1,0 +1,3 @@
+编译前cmd设置变量
+set GOOS=linux
+set GOPACH=amd64

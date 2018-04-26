@@ -40,7 +40,7 @@ type Repeater_pair struct {
 
 
 func ConfigLoad() {
-	content, err := ioutil.ReadFile("E:\\go\\message_repeater\\config.xml")
+	content, err := ioutil.ReadFile("config.xml")
 	if err != nil {
 		log.Fatal(err)
 	}
