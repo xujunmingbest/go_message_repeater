@@ -1,29 +1,24 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<message_repeater>
-  <repeater_max_number>123</repeater_max_number>
+<message_repeater>        <!-->mac1可以用学号表示<-->
+    <repeater_max_number>123</repeater_max_number>
   <repeater_pair>
        <pair1_mac1>653200693192441856</pair1_mac1>
 	   <pair1_mac2>mac3</pair1_mac2>
-       <pair_id>zt</pair_id>
   </repeater_pair>
   <repeater_pair>
        <pair1_mac1>653200796372320256</pair1_mac1>
 	   <pair1_mac2>zt</pair1_mac2>
-      <pair_id>2</pair_id>
   </repeater_pair>
     <repeater_pair>
         <pair1_mac1>mac2</pair1_mac1>
         <pair1_mac2>zt</pair1_mac2>
-        <pair_id>3</pair_id>
     </repeater_pair>
     <repeater_pair>
         <pair1_mac1>mac1</pair1_mac1>
         <pair1_mac2>zt</pair1_mac2>
-        <pair_id>4</pair_id>
     </repeater_pair>
     <repeater_pair>
         <pair1_mac1>mac你好</pair1_mac1>
         <pair1_mac2>mac4</pair1_mac2>
-        <pair_id>5</pair_id>
     </repeater_pair>
 </message_repeater>

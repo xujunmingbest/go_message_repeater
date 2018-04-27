@@ -35,7 +35,6 @@ type ConfigResult struct {
 type Repeater_pair struct {
 	Pair_mac1 string `xml:"pair1_mac1"` //默认是 mrcMacPair_mac1
 	Pair_mac2 string `xml:"pair1_mac2"` //Pair_mac2
-	Pair_id string `xml:"pair_id"` //Pair_mac2
 }
 
 

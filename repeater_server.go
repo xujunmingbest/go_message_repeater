@@ -22,7 +22,15 @@ func DoServerHandle(conn net.Conn) {
 	defer log.Println(conn_map)
 	//预先接收 mac 地址
 	//装载 mac和conn 到map
+	/************************
+    查找mac地址
 
+
+
+
+
+
+	*************************/
 	for {
 		//获取报文体的长度
 		err,first := GetMsg(conn,tcplen)
@@ -166,8 +174,7 @@ func FindPair(p *Repeater_pair)(b bool){
 }
 
 func GetMsg(conn net.Conn,len int)(error,[]byte){
-	msg := make([]byte, len)
-	_, err := conn.Read(msg) //读取客户机发的消息
+	err,msg:= NetRecv(conn,len)  //读取客户机发的消息
     return err,msg
 }
 
@@ -211,8 +218,8 @@ func GetMessageLen(tl []byte)(error,TcpFirst){
 
 
 func RecvHead(conn net.Conn,len int)(error,[]byte){
-	second := make([]byte,len)
-	_, err := conn.Read(second)
+	err,second:= NetRecv(conn,len)
+
 	enc := mahonia.NewDecoder("gb18030")
 	secondt := enc.ConvertString(string(second))
 	if err != nil {
@@ -294,6 +301,8 @@ func RemoveMacConn(mac *string,conn net.Conn){
 	}
 }
 
+
+
 //检测是不是已经登入
 func checkLogin(mac *string){
 	conn_map_lock.Lock()
@@ -352,3 +361,24 @@ func SendErr(errorCode int,srcMac *string, desMac *string,c net.Conn)(error){
 	}
 }
 
+
+
+
+/**************************
+介绍:
+鉴于 conn.read 函数 有时候会读不全 特意封装
+循环读取
+*****************************/
+func NetRecv(c net.Conn,readl int )(error,[]byte ){
+	readbuff := make([]byte,readl)
+
+	Readedlen := 0
+     for Readedlen < readl{
+		 n,err := c.Read(readbuff[Readedlen:])
+		 if err!=nil{
+		 	return err,nil
+		 }
+		 Readedlen += n;
+	 }
+     return nil,readbuff
+}
